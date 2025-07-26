@@ -143,7 +143,7 @@ def visualize_generation(model, exp_name, num_img=10, latent_dims=20):
         col = j % 10
         axes[row, col].axis('off')
 
-    plt.suptitle(f'Randomly Generated Images from Latent Space')
+    plt.suptitle(f'Randomly Generated Images from Latent Space, experiment {exp_name}')
     plt.tight_layout(rect=[0, 0, 1, 0.95])
 
     save_path = os.path.join(save_dir, 'generated_images.png')
@@ -154,19 +154,28 @@ def visualize_generation(model, exp_name, num_img=10, latent_dims=20):
 def FID_score(GTmodel, expmodel, testnum = 1000):
     GTmodel.eval()
     expmodel.eval()
+    GTmodel.to(device)
+    expmodel.to(device)
     GT_images = []
     exp_images = []
+    print(torch.cuda.is_available())
+    print("current device:", next(GTmodel.parameters()).device, next(expmodel.parameters()).device) 
 
     for i in range(testnum):
         with torch.no_grad():
-            latent = torch.randn(num_img, latent_dims).to(device)
-            GT_img = GTmodel.decoder(latent).cpu()
-            exp_img = expmodel.decoder(latent).cpu()
+            latent = torch.randn(1, latent_dims).to(device)  # 1개의 latent vector 생성
+            GT_img = GTmodel.decoder(latent)#.cpu()
+            exp_img = expmodel.decoder(latent)#.cpu()
             GT_images.append(GT_img)
             exp_images.append(exp_img)
     
     GT_images = torch.cat(GT_images, dim=0)
     exp_images = torch.cat(exp_images, dim=0)
+
+    if GT_images.size(1) == 1:
+        GT_images = GT_images.repeat(1, 3, 1, 1)       # [N, 3, H, W]로 변환
+    if exp_images.size(1) == 1:
+        exp_images = exp_images.repeat(1, 3, 1, 1)     # [N, 3, H, W]로 변환
 
     fid = FrechetInceptionDistance(normalize=True).to(device)
 
@@ -175,20 +184,30 @@ def FID_score(GTmodel, expmodel, testnum = 1000):
 
     return fid.compute().item() # return FID score as float
 
-def LPIPS_score(GTmodel, expmodel):
-    global test_dataloader
+def LPIPS_score(test_dataloader, GTmodel, expmodel):
+    GTmodel.eval()
+    expmodel.eval()
+    GTmodel.to(device)
+    expmodel.to(device) 
+    loss_fn = lpips.LPIPS(net='alex').to(device)
+
 
     for img_batch, _ in test_dataloader:
-        img_batch = img_batch.to(device)
+        with torch.no_grad():
+            img_batch = img_batch.to(device)
 
-        GT_img_recon, _, _ = GTmodel(img_batch)
-        exp_img_recon, _, _ = expmodel(img_batch)
+            GT_img_recon, _, _ = GTmodel(img_batch)
+            exp_img_recon, _, _ = expmodel(img_batch)
 
-        GT_img_recon = GT_img_recon.cpu()
-        exp_img_recon = exp_img_recon.cpu()
+            GT_img_recon = GT_img_recon#.cpu()
+            exp_img_recon = exp_img_recon#.cpu()
 
-        # LPIPS 계산
-        loss_fn = lpips.LPIPS(net='alex').to(device)
-        score = loss_fn(GT_img_recon, exp_img_recon)
+            GT_img_recon = F.interpolate(GT_img_recon, size=(64, 64), mode='bilinear')
+            exp_img_recon = F.interpolate(exp_img_recon, size=(64, 64), mode='bilinear')
+
+            # LPIPS 계산
+            
+            #print(GT_img_recon.shape, exp_img_recon.shape)  
+            score = loss_fn(GT_img_recon, exp_img_recon)
 
     return score.mean().item()  # 평균 LPIPS 점수 반환 (float)

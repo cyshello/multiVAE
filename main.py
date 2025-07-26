@@ -12,6 +12,9 @@ from taskvector import *
 from config import *
 from torch.utils.data import ConcatDataset, DataLoader
 
+
+device = torch.device("cuda:0" if use_gpu and torch.cuda.is_available() else "cpu")
+
 load_datasets(datapath)
 
 train_dataloader_digits, train_dataloader_baseline = split_mnist(overfit_num)
@@ -116,19 +119,23 @@ lipips_results = {}
 
 for digits in test_set_two:
     digit1, digit2 = digits
-    GTmodel = overfit_model_with_two[digits]
+    GTmodel = overfit_model_with_two[digits].to(device)
     print(f"Evaluating models for digits {digit1} and {digit2}...")
 
     # Evaluate added models with different coefficients
     for coeff, model in added_model_with_two[digits].items():
+        model = model.to(device)
         fidscore = FID_score(
             GTmodel=GTmodel,
             expmodel=model,
-            test_num = 1000
+            testnum = 1000
         )
         print(f"Coefficient {coeff}: FID score = {fidscore:.4f}")
 
+        tmpdataset = train_dataloader_digits[digit1].dataset + train_dataloader_digits[digit2].dataset
+        test = DataLoader(tmpdataset, batch_size=32, shuffle=True)
         lpipsscore = LPIPS_score(
+            test_dataloader = test,
             GTmodel=GTmodel,
             expmodel=model,
         )
@@ -142,9 +149,34 @@ for digits in test_set_two:
 # Visualize the results
 
 for digits in test_set_two:
+    bestFID = 0x0fffffff
+    bestLPIPS = 0x0fffffff
     for coeff in coefficients:
         coeff1, coeff2 = coeff
+        if bestFID < fid_results[digits][coeff]:
+            bestFID = fid_results[digits][coeff]
+            bestFIDcoeff = coeff
+        
+        if bestLPIPS < lipips_results[digits][coeff]:
+            bestLPIPS = lipips_results[digits][coeff]
+            bestLPIPScoeff = coeff
+
         print(f"Digits {digits}, Coefficients {coeff1}, {coeff2}:")
         print(f"  FID Score: {fid_results[digits][coeff]:.4f}") 
         print(f"  LPIPS Score: {lipips_results[digits][coeff]:.4f}")
-        
+    
+    print(f"Best coeff with best FID score, LPIPS score : {bestFIDcoeff}, {bestLPIPScoeff}")
+
+    visualize_generation(
+        model = added_model_with_two[digits][bestFIDcoeff],
+        exp_name = f"bestFIDmodel_visualization_{digits[0]}_{digits[1]}"
+    )
+    print(f"visualized image saved at bestFIDmodel_visualization_{digits[0]}_{digits[1]}")
+    
+    visualize_generation(
+        model = added_model_with_two[digits][bestLPIPScoeff],
+        exp_name = f"bestLPIPSmodel_visualization_{digits[0]}_{digits[1]}"
+    )
+    print(f"visualized image saved at bestLPIPSmodel_visualization_{digits[0]}_{digits[1]}")
+
+    
