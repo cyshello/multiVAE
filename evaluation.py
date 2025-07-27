@@ -113,13 +113,14 @@ def visualize_generation(model, exp_name, num_img=10, latent_dims=20):
         latent_dims: latent space 차원 수
         device: 연산 장치 ('cpu' 또는 'cuda')
     """
+    model.cpu()
     model.eval()
     save_dir = os.path.join(exppath, exp_name)
     os.makedirs(save_dir, exist_ok=True)
 
     with torch.no_grad():
-        latent = torch.randn(num_img, latent_dims).to(device)
-        generated_imgs = model.decoder(latent).cpu()
+        latent = torch.randn(num_img, latent_dims)
+        generated_imgs = model.decoder(latent)#.cpu()
 
     # 10개씩 한 행에 출력
     rows = (num_img + 9) // 10
@@ -160,27 +161,26 @@ def FID_score(GTmodel, expmodel, testnum = 1000):
     exp_images = []
     print(torch.cuda.is_available())
     print("current device:", next(GTmodel.parameters()).device, next(expmodel.parameters()).device) 
-
-    for i in range(testnum):
-        with torch.no_grad():
-            latent = torch.randn(1, latent_dims).to(device)  # 1개의 latent vector 생성
-            GT_img = GTmodel.decoder(latent)#.cpu()
-            exp_img = expmodel.decoder(latent)#.cpu()
-            GT_images.append(GT_img)
-            exp_images.append(exp_img)
-    
-    GT_images = torch.cat(GT_images, dim=0)
-    exp_images = torch.cat(exp_images, dim=0)
-
-    if GT_images.size(1) == 1:
-        GT_images = GT_images.repeat(1, 3, 1, 1)       # [N, 3, H, W]로 변환
-    if exp_images.size(1) == 1:
-        exp_images = exp_images.repeat(1, 3, 1, 1)     # [N, 3, H, W]로 변환
-
     fid = FrechetInceptionDistance(normalize=True).to(device)
 
-    fid.update(GT_images, real=True)
-    fid.update(exp_images, real=False)
+    batch_size = 100
+    for i in range(0, testnum, batch_size):
+        with torch.no_grad():
+            latent = torch.randn(batch_size, latent_dims).to(device)
+            GT_imgs = GTmodel.decoder(latent).to(device)
+            exp_imgs = expmodel.decoder(latent).to(device)
+            # 1채널 → 3채널
+            if GT_imgs.size(1) == 1:
+                GT_imgs = GT_imgs.repeat(1, 3, 1, 1)
+            if exp_imgs.size(1) == 1:
+                exp_imgs = exp_imgs.repeat(1, 3, 1, 1)
+            fid.update(GT_imgs, real=True)
+            fid.update(exp_imgs, real=False)
+            del latent, GT_imgs, exp_imgs
+            torch.cuda.empty_cache()
+
+        #fid.update(GT_images, real=True)
+        #fid.update(exp_images, real=False)
 
     return fid.compute().item() # return FID score as float
 
@@ -191,7 +191,6 @@ def LPIPS_score(test_dataloader, GTmodel, expmodel):
     expmodel.to(device) 
     loss_fn = lpips.LPIPS(net='alex').to(device)
 
-
     for img_batch, _ in test_dataloader:
         with torch.no_grad():
             img_batch = img_batch.to(device)
@@ -199,8 +198,8 @@ def LPIPS_score(test_dataloader, GTmodel, expmodel):
             GT_img_recon, _, _ = GTmodel(img_batch)
             exp_img_recon, _, _ = expmodel(img_batch)
 
-            GT_img_recon = GT_img_recon#.cpu()
-            exp_img_recon = exp_img_recon#.cpu()
+            #GT_img_recon = GT_img_recon#.cpu()
+            #exp_img_recon = exp_img_recon#.cpu()
 
             GT_img_recon = F.interpolate(GT_img_recon, size=(64, 64), mode='bilinear')
             exp_img_recon = F.interpolate(exp_img_recon, size=(64, 64), mode='bilinear')

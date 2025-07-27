@@ -89,7 +89,7 @@ def task_vectors_exp(baseline_path, scaling_coef, test_set):
         print(f"Experiment #{i} with digits:")
 
         for digit in digits:
-            print(digit,end=" ")
+            #print(digit,end=" ")
             new_vector += task_vectors_digits[digit]
 
         print()
