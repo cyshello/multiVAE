@@ -30,6 +30,8 @@ class TaskVector:
         if isinstance(pretrained_checkpoint, str):
             pretrained_state = torch.load(pretrained_checkpoint, map_location='cpu')
         else:
+            # pretrained_checkpoint이 모델 객체인 경우
+            pretrained_checkpoint.cpu()
             pretrained_state = pretrained_checkpoint.state_dict()
 
         new_state = copy.deepcopy(pretrained_state)
@@ -71,38 +73,70 @@ class TaskVector:
         result = TaskVector.__new__(TaskVector)
         result.vector = {key: -value for key, value in self.vector.items()}
         return result
+    
+    def cosine_similarity(self, other):
+        """Task vector 간의 코사인 유사도 계산"""
+        if not isinstance(other, TaskVector):
+            raise TypeError("other must be an instance of TaskVector")
+
+        cos_sim = 0.0
+        for key in self.vector:
+            v1 = self.vector[key].flatten()
+            v2 = other.vector[key].flatten()
+            # numpy나 torch API여도 결과는 스칼라 한 개
+            cos = F.cosine_similarity(v1, v2, dim=0)
+            cos_sim += cos
+        return cos_sim / len(self.vector) if self.vector else 0.0
 
 ####################
 # task vectors exp #
 ####################
 
-def task_vectors_exp(baseline_path, scaling_coef, test_set):
+def task_vectors_exp(baseline_path, scaling_coef, test_set,exp_name=""):
     '''
     baseline_path에 있는 모델과 test_set에 있는 숫자의 task vector들을 scaling_coef으로 곱해서 더한 후에 evaluating 하고 리턴
     '''
     print(f"Conducting Experiment for {len(test_set)} task vectors...")
+    models = {}
 
     for i, digits in enumerate(test_set):
         new_vector = TaskVector.__new__(TaskVector)
         new_vector.vector = {}
 
         print(f"Experiment #{i} with digits:")
+        digit1, digit2 = digits
 
-        for digit in digits:
-            #print(digit,end=" ")
-            new_vector += task_vectors_digits[digit]
-
-        print()
-        new_model = new_vector.apply_to(
+        new_model = task_vectors_digits[digit1].apply_to(
             baseline_path,
             scaling_coef=scaling_coef,
-            return_model = True,
-            model_class = VariationalAutoencoder
-            )
+            return_model=True,
+            model_class=VariationalAutoencoder
+        )
+
+        new_model = task_vectors_digits[digit2].apply_to(
+            new_model,
+            scaling_coef=scaling_coef,
+            return_model=True,
+            model_class=VariationalAutoencoder
+        )
+
+        # for digit in digits:
+        #     #print(digit,end=" ")
+        #     new_vector += task_vectors_digits[digit]
+
+        # new_model = new_vector.apply_to(
+        #     baseline_path,
+        #     scaling_coef=scaling_coef,
+        #     return_model = True,
+        #     model_class = VariationalAutoencoder
+        #     )
 
         new_model = new_model.to(device)
         new_model.eval()
 
         evalaute_vae_recon(new_model) #only loss
         #evaluate_vae_recon_debug_five_samples(new_model) #with img samples reconstruction
-        visualize_generation(new_model, f"{scaling_coef}_exp_{i}")
+        visualize_generation(new_model, f"{scaling_coef}_exp_{i}_{exp_name}")
+        models[digits] = new_model
+    
+    return models

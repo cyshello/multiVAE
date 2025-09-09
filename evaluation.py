@@ -210,3 +210,25 @@ def LPIPS_score(test_dataloader, GTmodel, expmodel):
             score = loss_fn(GT_img_recon, exp_img_recon)
 
     return score.mean().item()  # 평균 LPIPS 점수 반환 (float)
+
+def cosine_sim_visualize(taskvectors): # taskvectors: list of task vectors, each task vector is a numpy array
+    cos_sim = [[] for _ in range(len(taskvectors))] # cos_sim[i][j] = cosine similarity between task i and task j
+    for i in range(len(taskvectors)):
+        for j in range(len(taskvectors)):
+            cos_sim[i].append(taskvectors[i].cosine_similarity(taskvectors[j]).item())
+
+    # 시각화
+    plt.imshow(cos_sim, cmap='hot', interpolation='nearest')
+    for i in range(len(cos_sim)):
+        for j in range(len(cos_sim[i])):
+            plt.text(j, i, f"{cos_sim[i][j]:.2f}", ha='center', va='center', color='white' if cos_sim[i][j] < 0.5 else 'black', fontsize=8)
+    plt.colorbar()
+    plt.title('Cosine Similarity between Task Vectors')
+    plt.xlabel('Task Index')
+    plt.ylabel('Task Index')
+    plt.show()
+
+    plt.savefig('experiments/epoch50/cosine_similarity_matrix.png')
+    plt.close()
+
+    return cos_sim  # return cosine similarity matrix as a list of lists
