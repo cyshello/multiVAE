@@ -20,13 +20,14 @@ def evalaute_vae_recon(model): # calculate vae_loss for each digit test datasets
   avg_recon_loss = [0 for _ in range(10)]
   for digit in range(10):
     for img_batch, _ in test_digit_dataloaders[digit]:
-      img_batch = img_batch.to(device)
+        img_batch = img_batch.to(device)
 
-      img_batch_recon, latent_mu, latent_logvar = model(img_batch)
+        img_batch_recon, latent_mu, latent_logvar = model(img_batch)
 
-      loss = vae_loss(img_batch_recon,img_batch, latent_mu, latent_logvar)
+        loss = F.binary_cross_entropy(img_batch_recon, img_batch, reduction='sum')
+        #loss = vae_loss(img_batch_recon,img_batch, latent_mu, latent_logvar)
 
-      avg_recon_loss[digit] += loss.item()
+        avg_recon_loss[digit] += loss.item()
 
     avg_recon_loss[digit] /= len(test_digit_dataloaders[digit])
     print(f"average vae_loss for number {digit} : ",avg_recon_loss[digit])

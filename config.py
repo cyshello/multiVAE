@@ -17,9 +17,9 @@ variational_beta = 1
 use_gpu = True
 overfit_num = 3000 # number of datasets that overfit models will use. baseline model will use the remaining datasets.
 
-datapath = "./data/"
-modelpath = "./models/"
-exppath = "./experiments/"
+datapath = "/home/intern/youngseo/multiVAE/data/"
+modelpath = "/home/intern/youngseo/multiVAE/models/"
+exppath = "/home/intern/youngseo/multiVAE/experiments/"
 
 EXP_names = []
 

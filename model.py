@@ -23,6 +23,13 @@ class Encoder(nn.Module):
         x_logvar = self.fc_logvar(x)
         return x_mu, x_logvar
 
+    def representation(self, x):
+        f1 = F.relu(self.conv1(x))
+        f2 = F.relu(self.conv2(f1))
+        mu = self.fc_mu(f2.view(f2.size(0), -1))
+        logvar = self.fc_logvar(f2.view(f2.size(0), -1))
+        return f1, f2, mu, logvar
+
 class Decoder(nn.Module):
     def __init__(self):
         super(Decoder, self).__init__()
@@ -37,6 +44,13 @@ class Decoder(nn.Module):
         x = F.relu(self.conv2(x))
         x = torch.sigmoid(self.conv1(x)) # last layer before output is sigmoid, since we are using BCE as reconstruction loss
         return x
+
+    def representation(self, x):
+        fc = self.fc(x)
+        fc = fc.view(fc.size(0), capacity*2, 7, 7)
+        f2 = F.relu(self.conv2(fc))
+        f1 = torch.sigmoid(self.conv1(f2))
+        return fc, f1, f2
 
 class VariationalAutoencoder(nn.Module):
     def __init__(self):
